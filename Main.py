@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import random, os.path, math
+import random, os.path, math, json, time
 
 #import basic pygame modules
 import pygame
@@ -177,9 +177,10 @@ class Score(pygame.sprite.Sprite):
             self.image = self.font.render(msg, 0, self.color)
 
 #Q-Learning Agent
-agent = Agent.QLearningAgent()
+agent = Agent.DeepQLearningAgent(1, 3)
 agent.load_data()
 def main(winstyle = 0):
+    ts = time.time()
     # Initialize pygame
     pygame.init()
     if pygame.mixer and not pygame.mixer.get_init():
@@ -258,10 +259,10 @@ def main(winstyle = 0):
     global KILL_BY_ALIEN
     global KILL_BY_BOMB
 
-    prev_state = {}
-    curr_state = {}
-    prev_action = ''
-    curr_action = ''
+    prev_state = [[0, 0, 0, 0, 0, 0]]
+    curr_state = [[0, 0, 0, 0, 0, 0]]
+    prev_action = -1
+    curr_action = -1
     reward = 0
     target_alien = ''
     is_killed = False
@@ -339,7 +340,7 @@ def main(winstyle = 0):
         #bombs find a bomb on the top of the player as S
         cur_bomb_count = 0
         max_bomb_count = 1
-        bomb_state = ''
+        bomb_state = []
         for i in range(0, len(bomb_list)):
             dx = bomb_list[i].rect.centerx - player.rect.centerx #left: -, right +
             dy = player.rect.centery - bomb_list[i].rect.centery #top +
@@ -356,7 +357,7 @@ def main(winstyle = 0):
             else:
                 ddx = math.floor(dx / bomb_list[i].rect.width)
             ddy = math.ceil(dy / bomb_list[i].rect.height)
-            bomb_state += '(' + str(ddx) + ',' + str(ddy) + ')'
+            bomb_state = [ddx, ddy]
             cur_bomb_count += 1
             if cur_bomb_count >= max_bomb_count:
                 break
@@ -376,17 +377,19 @@ def main(winstyle = 0):
         #aliens find the nearest one as S
         cur_alien_count = 0
         max_alien_count = 1
-        alien_state = ''
+        alien_state = []
         target_alien = ''
+        facing_state = 0
         for i in range(0, len(alien_list)):
             dx = alien_list[i].rect.centerx - player.rect.centerx
             dy = player.rect.centery - alien_list[i].rect.centery
             if dx < 0:
-                ddx = math.floor(dx / alien_list[i].rect.width)
+                ddx = math.floor(dx / (alien_list[i].rect.width / 4))
             else:
-                ddx = math.ceil(dx / alien_list[i].rect.width)
+                ddx = math.ceil(dx / (alien_list[i].rect.width / 4))
             ddy = math.ceil(dy / alien_list[i].rect.height)
-            alien_state += '(' + str(ddx) + ',' + str(ddy) + ',' + str(alien_list[i].facing) + ')'
+            alien_state = [ddx, ddy]
+            facing_state = alien_list[i].facing
             cur_alien_count += 1
             if target_alien != '' and is_killed == False and alien_list[i].rect.centery > target_alien.rect.centery:
                 is_missed = True
@@ -395,13 +398,18 @@ def main(winstyle = 0):
                 break    
         
         prev_state = curr_state
-        curr_state = {
-            'bomb': bomb_state,
-            'alien': alien_state
-            #'firing': len(shots)
-        }
+        curr_state = [[0, 0, 0, 0, 0, 0]]
+        if len(bomb_state) > 0:
+            curr_state[0][0] = bomb_state[0]
+            curr_state[0][1] = bomb_state[1]
+        if len(alien_state) > 0:
+            curr_state[0][2] = alien_state[0]
+            curr_state[0][3] = alien_state[1]
+        curr_state[0][4] = facing_state
+        curr_state[0][5] = len(shots)
+            
         #print(curr_state)
-        agent.add_state(curr_state, ['L', 'R', 'F'])
+        #agent.add_state(curr_state, ['L', 'R', 'F'])
         ###
         #Agent: Get action
         #direction: left = -1, right = 1
@@ -410,11 +418,11 @@ def main(winstyle = 0):
         curr_action = agent.get_action(curr_state)
         direction = 0
         firing = 0
-        if curr_action == 'L':
+        if curr_action == 0:
             direction = -1
-        elif curr_action == 'R':
+        elif curr_action == 1:
             direction = 1
-        elif curr_action == 'F':
+        elif curr_action == 2:
             firing = 1
         ###
         #Agent: Study
@@ -429,7 +437,9 @@ def main(winstyle = 0):
             if not player.alive():
                 reward = -1000
 
-            agent.study(prev_state, prev_action, curr_state, reward)
+            #agent.study(prev_state, prev_action, curr_state, reward)
+            agent.remember(prev_state, prev_action, reward, curr_state, not player.alive())
+            agent.replay(agent.batch_size)
         ###
             
         #draw the scene
@@ -442,11 +452,9 @@ def main(winstyle = 0):
     #restart game constants
     global PLAY_TIMES
     PLAY_TIMES = PLAY_TIMES + 1
-    agent.training += 1
-    print('ROUND ' + str(agent.training) + \
-          ': ' + str(SCORE).zfill(2) + \
-          ', S: ' + str(len(agent.Q.keys())) + \
-          ', Zero: ' + str(agent.get_Q_zero_count())
+    #agent.training += 1
+    print('ROUND ' + str(0) + \
+          ': ' + str(SCORE).zfill(2)
           )
     agent.save_data()
 ###
@@ -457,7 +465,22 @@ def main(winstyle = 0):
     f = open ( 'score.txt' , 'w+' )
     f.write ( str ( SCORE ) )
     f.close()
+    
+    te = time.time()
+    f = open ( 'score.txt' , 'r' )
+    score = f.readline()
+    f.close()
+    s = 'ROUND, ' + str ( 0 ) + \
+        ', score, ' + str ( SCORE ) + \
+        ', time, ' + str ( te - ts )
+    print ( s )
+    f = open ( 'log.txt' , 'a' )
+    f.write ( s )
+    f.write ( '\n' )
+    f.close()
 
+    SCORE = 0
+    
     pygame.quit()
 
 
