@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import numpy as np
 import random, os.path, math, json, time
 
 #import basic pygame modules
@@ -259,8 +259,8 @@ def main(winstyle = 0):
     global KILL_BY_ALIEN
     global KILL_BY_BOMB
 
-    prev_state = [[0, 0, 0, 0, 0, 0]]
-    curr_state = [[0, 0, 0, 0, 0, 0]]
+    prev_state = np.array([0, 0, 0, 0, 0, 0])
+    curr_state = np.array([0, 0, 0, 0, 0, 0])
     prev_action = -1
     curr_action = -1
     reward = 0
@@ -398,15 +398,15 @@ def main(winstyle = 0):
                 break    
         
         prev_state = curr_state
-        curr_state = [[0, 0, 0, 0, 0, 0]]
+        curr_state = np.array([0, 0, 0, 0, 0, 0])
         if len(bomb_state) > 0:
-            curr_state[0][0] = bomb_state[0]
-            curr_state[0][1] = bomb_state[1]
+            curr_state[0] = bomb_state[0]
+            curr_state[1] = bomb_state[1]
         if len(alien_state) > 0:
-            curr_state[0][2] = alien_state[0]
-            curr_state[0][3] = alien_state[1]
-        curr_state[0][4] = facing_state
-        curr_state[0][5] = len(shots)
+            curr_state[2] = alien_state[0]
+            curr_state[3] = alien_state[1]
+        curr_state[4] = facing_state
+        curr_state[5] = len(shots)
             
         #print(curr_state)
         #agent.add_state(curr_state, ['L', 'R', 'F'])
@@ -447,7 +447,7 @@ def main(winstyle = 0):
         pygame.display.update(dirty)
 
         #cap the framerate
-        clock.tick(60)
+        clock.tick(30)
 
     #restart game constants
     global PLAY_TIMES
@@ -481,9 +481,10 @@ def main(winstyle = 0):
 
     SCORE = 0
     
-    pygame.quit()
+    #pygame.quit()
 
 
 #call the "main" function if running this script
 if __name__ == '__main__':
-    main()
+    while True:
+        main()
