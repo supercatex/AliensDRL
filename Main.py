@@ -177,8 +177,9 @@ class Score(pygame.sprite.Sprite):
             self.image = self.font.render(msg, 0, self.color)
 
 #Q-Learning Agent
-agent = Agent.DeepQLearningAgent(1, 3)
+agent = Agent.DQNAgent(action_size=3)
 agent.load_data()
+is_quit = False
 def main(winstyle = 0):
     ts = time.time()
     # Initialize pygame
@@ -259,17 +260,17 @@ def main(winstyle = 0):
     global KILL_BY_ALIEN
     global KILL_BY_BOMB
 
-    prev_state = [[0, 0, 0, 0, 0, 0]]
-    curr_state = [[0, 0, 0, 0, 0, 0]]
-    prev_action = -1
-    curr_action = -1
+    prev_state = []
+    curr_state = []
+    prev_action = 0
+    curr_action = 0
     reward = 0
-    target_alien = ''
-    is_killed = False
-    is_missed = False
+    kill_count = 0
 ###
     while player.alive():
-
+ 
+        pygame.image.save(screen.subsurface(SCREENRECT), 'screenshot.jpg')
+        
         #get input
         for event in pygame.event.get():
             if event.type == QUIT or \
@@ -287,10 +288,11 @@ def main(winstyle = 0):
 #        direction = keystate[K_RIGHT] - keystate[K_LEFT]
         player.move(direction)
 #        firing = keystate[K_SPACE]
-        if not player.reloading and firing and len(shots) < MAX_SHOTS:
+        if player.reloading == 0 and firing and len(shots) < MAX_SHOTS:
             Shot(player.gunpos())
             shoot_sound.play()
-        player.reloading = firing
+            player.reloading = 2
+        player.reloading = max(0, player.reloading - 1)
 
         # Create new alien
         if alienreload:
@@ -312,8 +314,7 @@ def main(winstyle = 0):
             player.kill()
 
         for alien in pygame.sprite.groupcollide(aliens, shots, 1, 1).keys():
-            if alien == target_alien:
-                is_killed = True
+            kill_count += 1 #Killed
             boom_sound.play()
             Explosion(alien)
             SCORE = SCORE + 1
@@ -324,98 +325,14 @@ def main(winstyle = 0):
             Explosion(bomb)
             player.kill()
 
-        #Agent: State Model
-        #bombs order by distance
-        bomb_dict = {}
-        for i in range(0, len(bombs.sprites())):
-            dx = bombs.sprites()[i].rect.centerx - player.rect.centerx
-            dy = bombs.sprites()[i].rect.centery - player.rect.centery
-            distance = math.sqrt(dx * dx + dy * dy)
-            bomb_dict[distance] = bombs.sprites()[i]
-        bomb_keys = list(bomb_dict.keys())
-        bomb_keys.sort(reverse = False)
-        bomb_list = []
-        for i in range(0, len(bomb_keys)):
-            bomb_list.append(bomb_dict[bomb_keys[i]])
-        #bombs find a bomb on the top of the player as S
-        cur_bomb_count = 0
-        max_bomb_count = 1
-        bomb_state = []
-        for i in range(0, len(bomb_list)):
-            dx = bomb_list[i].rect.centerx - player.rect.centerx #left: -, right +
-            dy = player.rect.centery - bomb_list[i].rect.centery #top +
-            if abs(dx) > player.rect.width / 2 + bomb_list[i].rect.width * 2:
-                continue
-            if player.rect.centerx >= player.rect.width / 2 and \
-               player.rect.centerx <= player.rect.width and dx >= 0:
-                dx = dx - player.rect.width / 2 + player.rect.centerx - player.rect.width / 2
-            if player.rect.centerx >= 640 - player.rect.width and \
-               player.rect.centerx <= 640 - player.rect.width / 2 and dx < 0:
-                dx = dx + player.rect.width / 2 - (player.rect.centerx - (640 - player.rect.width / 2))
-            if dx < 0:
-                ddx = math.ceil(dx / bomb_list[i].rect.width)
-            else:
-                ddx = math.floor(dx / bomb_list[i].rect.width)
-            ddy = math.ceil(dy / bomb_list[i].rect.height)
-            bomb_state = [ddx, ddy]
-            cur_bomb_count += 1
-            if cur_bomb_count >= max_bomb_count:
-                break
-
-        #aliens order by y
-        alien_dict = {}
-        for i in range(0, len(aliens.sprites())):
-            dx = aliens.sprites()[i].rect.centerx - player.rect.centerx
-            dy = aliens.sprites()[i].rect.centery - player.rect.centery
-            distance = math.sqrt(dx * dx + dy * dy)
-            alien_dict[dy] = aliens.sprites()[i]
-        alien_keys = list(alien_dict.keys())
-        alien_keys.sort(reverse = True)
-        alien_list = []
-        for i in range(0, len(alien_keys)):
-            alien_list.append(alien_dict[alien_keys[i]])
-        #aliens find the nearest one as S
-        cur_alien_count = 0
-        max_alien_count = 1
-        alien_state = []
-        target_alien = ''
-        facing_state = 0
-        for i in range(0, len(alien_list)):
-            dx = alien_list[i].rect.centerx - player.rect.centerx
-            dy = player.rect.centery - alien_list[i].rect.centery
-            if dx < 0:
-                ddx = math.floor(dx / (alien_list[i].rect.width / 4))
-            else:
-                ddx = math.ceil(dx / (alien_list[i].rect.width / 4))
-            ddy = math.ceil(dy / alien_list[i].rect.height)
-            alien_state = [ddx, ddy]
-            facing_state = alien_list[i].facing
-            cur_alien_count += 1
-            if target_alien != '' and is_killed == False and alien_list[i].rect.centery > target_alien.rect.centery:
-                is_missed = True
-            target_alien = alien_list[i]
-            if cur_alien_count >= max_bomb_count:
-                break    
-        
+        #Agent
         prev_state = curr_state
-        curr_state = [[0, 0, 0, 0, 0, 0]]
-        if len(bomb_state) > 0:
-            curr_state[0][0] = bomb_state[0]
-            curr_state[0][1] = bomb_state[1]
-        if len(alien_state) > 0:
-            curr_state[0][2] = alien_state[0]
-            curr_state[0][3] = alien_state[1]
-        curr_state[0][4] = facing_state
-        curr_state[0][5] = len(shots)
-            
-        #print(curr_state)
-        #agent.add_state(curr_state, ['L', 'R', 'F'])
-        ###
-        #Agent: Get action
-        #direction: left = -1, right = 1
-        #firing = 1
+        curr_state = agent.get_state_by_path('screenshot.jpg')
+        if len(prev_state) == 0:
+            prev_state = curr_state
+
         prev_action = curr_action
-        curr_action = agent.get_action(curr_state)
+        curr_action, actions = agent.get_action(curr_state)
         direction = 0
         firing = 0
         if curr_action == 0:
@@ -424,22 +341,18 @@ def main(winstyle = 0):
             direction = 1
         elif curr_action == 2:
             firing = 1
-        ###
-        #Agent: Study
-        if prev_action != '':
-            reward = 0
-            if is_missed:
-                #reward = -50
-                is_missed = False
-            if is_killed:
-                reward = 1
-                is_killed = False
-            if not player.alive():
-                reward = -1000
-
-            #agent.study(prev_state, prev_action, curr_state, reward)
-            agent.remember(prev_state, prev_action, reward, curr_state, not player.alive())
-            agent.replay(agent.batch_size)
+        
+        reward = 0
+        if kill_count > 0:
+            reward = 1
+            kill_count = 0
+        if not player.alive():
+            reward -= 1
+        
+        agent.store_transition(prev_state, prev_action, reward, curr_state, not player.alive())
+        agent.train()
+        
+        print('action:', curr_action, 'Q:', actions, 'epsilon', agent.epsilon, 'loss:', agent.loss)
         ###
             
         #draw the scene
@@ -466,11 +379,13 @@ def main(winstyle = 0):
     f.write ( str ( SCORE ) )
     f.close()
     
+    number_lines = sum(1 for line in open('log.txt'))
+    
     te = time.time()
     f = open ( 'score.txt' , 'r' )
     score = f.readline()
     f.close()
-    s = 'ROUND, ' + str ( 0 ) + \
+    s = 'ROUND, ' + str ( number_lines + 1 ) + \
         ', score, ' + str ( SCORE ) + \
         ', time, ' + str ( te - ts )
     print ( s )
@@ -481,9 +396,10 @@ def main(winstyle = 0):
 
     SCORE = 0
     
-    pygame.quit()
+    #pygame.quit()
 
 
 #call the "main" function if running this script
 if __name__ == '__main__':
-    main()
+    while is_quit == False:
+        main()
