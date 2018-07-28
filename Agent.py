@@ -27,7 +27,7 @@ class DeepQLearningAgent:
         self.epsilon = 1     # exploration rate
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
-        self.learning_rate = 0.1
+        self.learning_rate = 0.01
         self.batch_size = 32
         self.filename = './data/data.h5'
         self.model = self._build_model()
@@ -58,7 +58,7 @@ class DeepQLearningAgent:
     def replay(self, batch_size):
         if len(self.memory) < batch_size:
             return
-        print(self.epsilon)
+        
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
             target = reward
@@ -221,7 +221,6 @@ if __name__ == '__main__':
     plt.show()
     print(image.shape)
     
-<<<<<<< HEAD
     state = np.stack((image, image, image, image), axis=2)
     print(state.shape)
     
@@ -271,47 +270,4 @@ if __name__ == '__main__':
 #     
 #     agent.save_data()
 #     print('END')
-=======
-    agent = DeepQLearningAgent(1, 2)
-    #agent.load_data()
-    for i in range(0, 50):
-        print ('Round:', i + 1)
-        position = 1
-        prev_state = np.array([position])
-        curr_state = np.array([position])
-        prev_action = -1
-        curr_action = -1
-        reward = 0
-        done = False
- 
-        while True:
-            #Renew state
-            prev_state = curr_state
-            curr_state = np.array([position])
-
-            #Renew action
-            prev_action = curr_action
-            curr_action = agent.get_action(curr_state)
-            if curr_action == 0:
-                position = max(1, position - 1)
-            elif curr_action == 1:
-                position = position + 1
-            
-            #Study
-            if prev_action != -1:
-                reward = -1
-                if curr_state[0] == 6:
-                    reward = 1
-                    done = True
-                agent.remember(prev_state, prev_action, reward, curr_state, done)
-                agent.replay(agent.batch_size)
-                
-            print(curr_state, agent.epsilon)
-            if done:
-                done = False
-                break
-    
-    #agent.save_data()
-    print('END')
->>>>>>> f21f18890147640dbe340bccee9e56553413d15f
 
